@@ -1,0 +1,12 @@
+biopython==1.84
+country-converter==1.2.0
+matplotlib==3.9.2
+networkx==3.3
+numpy==2.1.1
+pandas==2.2.2
+pyarrow==17.0.0
+python-dateutil==2.9.0.post0
+pyvis==0.3.2
+pyyaml==6.0.2
+seaborn==0.13.2
+tqdm==4.66.5

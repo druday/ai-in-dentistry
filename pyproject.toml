@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-in-dentistry-temporal-network"
+version = "0.1.0"
+description = "Reproducible temporal network analysis of institutional collaboration in AI-related dentistry research."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+license = {text = "MIT"}
+authors = [
+  {name = "Uday Pratap Singh"},
+]
+dependencies = [
+  "biopython==1.84",
+  "country-converter==1.2.0",
+  "matplotlib==3.9.2",
+  "networkx==3.3",
+  "numpy==2.1.1",
+  "pandas==2.2.2",
+  "pyarrow==17.0.0",
+  "python-dateutil==2.9.0.post0",
+  "pyvis==0.3.2",
+  "pyyaml==6.0.2",
+  "seaborn==0.13.2",
+  "tqdm==4.66.5",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.3.3",
+  "ruff==0.6.9",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

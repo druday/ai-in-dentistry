@@ -1,0 +1,156 @@
+study:
+  title: "From Silos to Synergy: Temporal Network Analysis of AI-Dentistry Collaborations"
+  manuscript_period_start: 1946
+  manuscript_period_end: 2025
+  hard_publication_end_date: "2025-12-31"
+  retrieval_date: "2026-02-17"
+  notes:
+    - "This protocol reflects the Methods section in the manuscript."
+    - "PubMed publication-date upper bound is hard-capped at 2025-12-31."
+    - "Default segmentation mode is fixed with six manuscript bins."
+
+entrez:
+  db: "pubmed"
+  batch_size: 100
+  retmode: "text"
+  rettype: "medline"
+  max_records_per_query: null
+  contact_email_env: "NCBI_EMAIL"
+  api_key_env: "NCBI_API_KEY"
+
+queries:
+  - id: "ai_dentistry_1930_2019"
+    query: >-
+      (("Artificial Intelligence"[Mesh] OR "Generative Artificial Intelligence"[Mesh]
+      OR "artificial intelligence" OR "informatics" OR "machine learning" OR "deep learning"
+      OR "neural network*" OR "AI" OR "large language" OR "chatgpt")
+      AND ("Dentistry"[Mesh] OR "Evidence-Based Dentistry"[Mesh] OR "Mouth"[Mesh]
+      OR "Oral Medicine"[Mesh] OR "dental"[ti] OR "oral"[ti] OR "dentistry"[ti]
+      OR "mouth"[ti] OR "teeth"[ti] OR "tooth"[ti] OR "buccal"[ti] OR "pharynx"[ti]
+      OR "pharyngeal"[ti] OR "tongue"[ti] OR "maxillary"[ti] OR "mandibular"[ti]))
+      AND (("1930/01/01"[Date - Publication] : "2019/12/31"[Date - Publication]))
+  - id: "ai_dentistry_2020_2025"
+    query: >-
+      (("Artificial Intelligence"[Mesh] OR "Generative Artificial Intelligence"[Mesh]
+      OR "artificial intelligence" OR "informatics" OR "machine learning" OR "deep learning"
+      OR "neural network*" OR "AI" OR "large language" OR "chatgpt")
+      AND ("Dentistry"[Mesh] OR "Evidence-Based Dentistry"[Mesh] OR "Mouth"[Mesh]
+      OR "Oral Medicine"[Mesh] OR "dental"[ti] OR "oral"[ti] OR "dentistry"[ti]
+      OR "mouth"[ti] OR "teeth"[ti] OR "tooth"[ti] OR "buccal"[ti] OR "pharynx"[ti]
+      OR "pharyngeal"[ti] OR "tongue"[ti] OR "maxillary"[ti] OR "mandibular"[ti]))
+      AND (("2020/01/01"[Date - Publication] : "2025/12/31"[Date - Publication]))
+
+temporal_segmentation:
+  mode: "fixed" # options: fixed, balanced
+  fixed_periods:
+    - {label: "1946-2008", start_year: 1946, end_year: 2008}
+    - {label: "2009-2016", start_year: 2009, end_year: 2016}
+    - {label: "2017-2020", start_year: 2017, end_year: 2020}
+    - {label: "2021-2022", start_year: 2021, end_year: 2022}
+    - {label: "2023-2024", start_year: 2023, end_year: 2024}
+    - {label: "2025-2025", start_year: 2025, end_year: 2025}
+  dynamic:
+    n_bins: 6
+    min_year: 1946
+    max_year: 2025
+    min_years_per_bin: 1
+    use_observed_year_range: true
+
+preprocessing:
+  institution_extraction_mode: "exact_affiliation" # options: exact_affiliation, keyword_hint_segment
+  remove_punctuation: true
+  lowercase: true
+  deduplicate_within_publication: true
+  keep_only_records_with_affiliation: true
+  institution_keyword_hints: # used when institution_extraction_mode=keyword_hint_segment
+    - "university"
+    - "institute"
+    - "hospital"
+    - "medical center"
+    - "school"
+    - "college"
+    - "faculty"
+    - "clinic"
+    - "center"
+    - "laboratory"
+    - "department"
+    - "academy"
+
+classification:
+  dental:
+    - "dental"
+    - "oral"
+    - "maxillofacial"
+    - "odontology"
+    - "stomatology"
+    - "prosthodontic"
+    - "endodontic"
+    - "orthodontic"
+    - "periodontic"
+    - "oral surgery"
+    - "restorative"
+    - "periodontology"
+    - "implantology"
+    - "dentistry"
+  medical:
+    - "medical"
+    - "medicine"
+    - "hospital"
+    - "clinic"
+    - "health"
+    - "cardiology"
+    - "neurology"
+    - "oncology"
+    - "life science"
+    - "pediatrics"
+    - "psychiatry"
+    - "geriatrics"
+    - "urology"
+    - "nephrology"
+    - "endocrinology"
+    - "pathology"
+    - "immunology"
+    - "epidemiology"
+    - "pharmacology"
+    - "physiology"
+    - "clinical research"
+    - "public health"
+  technical:
+    - "technical"
+    - "technology"
+    - "engineering"
+    - "polytechnic"
+    - "computer science"
+    - "informatics"
+    - "electronics"
+    - "mechanical"
+    - "civil"
+    - "bioengineering"
+    - "chemical"
+    - "aerospace"
+    - "software"
+    - "electrical"
+    - "materials science"
+    - "robotics"
+    - "biomedical"
+    - "bioinformatics"
+
+outputs:
+  publications_table: "data/processed/publications.parquet"
+  publication_summary: "outputs/tables/publication_counts_by_period.csv"
+  period_definitions: "outputs/tables/period_definitions.csv"
+  global_metrics: "outputs/tables/global_network_metrics.csv"
+  core_newcomer_metrics: "outputs/tables/core_newcomer_metrics.csv"
+  cluster_metrics: "outputs/tables/cluster_interdisciplinarity_metrics.csv"
+  region_summary: "outputs/tables/who_region_summary.csv"
+  centrality_dir: "outputs/tables/centrality"
+  graph_dir: "outputs/networks"
+  graph_html_dir: "outputs/networks_html"
+
+visualization:
+  export_html: true
+  node_colors:
+    Dental: "#e31a1c"
+    Medical: "#1f78b4"
+    Technical: "#33a02c"
+    Other: "#bdbdbd"

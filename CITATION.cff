@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+title: "AI in Dentistry: Temporal Institutional Collaboration Analysis"
+message: "If you use this repository, please cite the manuscript and this software."
+type: software
+authors:
+  - family-names: Singh
+    given-names: Uday Pratap
+repository-code: "https://github.com/<your-org>/<your-repo>"
+license: MIT
