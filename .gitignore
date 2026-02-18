@@ -38,6 +38,8 @@ notebooks/.ipynb_checkpoints/
 
 # Local extraction artifact used during review
 manuscript_text_extracted.txt
+AI in Dentistry - Final Analysis.ipynb
+From Silos to Synergy Manuscript v1_in_progress.docx
 
 # PyVis local asset directory (generated when not using remote CDN)
 lib/
