@@ -125,6 +125,8 @@ Primary generated outputs:
 - `outputs/tables/core_newcomer_metrics.csv`
 - `outputs/tables/cluster_interdisciplinarity_metrics.csv`
 - `outputs/tables/who_region_summary.csv`
+- `outputs/tables/table_descriptive_by_period.csv`
+- `outputs/tables/table_descriptive_by_period.md`
 - `outputs/tables/period_definitions.csv`
 - `outputs/networks/institutions_<period>.graphml`
 - `outputs/networks_html/institutions_<period>.html`
@@ -168,6 +170,15 @@ python scripts/generate_interactive_sankey.py \
   --top-n-institutions 120 \
   --min-periods-present 2 \
   --save-data-csv
+```
+
+Generate manuscript-ready descriptive table:
+
+```bash
+python scripts/generate_descriptive_table.py \
+  --project-root . \
+  --output-csv outputs/tables/table_descriptive_by_period.csv \
+  --output-md outputs/tables/table_descriptive_by_period.md
 ```
 
 ## Existing source artifacts

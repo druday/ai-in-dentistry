@@ -634,6 +634,34 @@ def build_role_trace(nodes: pd.DataFrame, links: pd.DataFrame, domain: dict[str,
     }
 
 
+def build_period_annotations(
+    period_order: list[str],
+    domain: dict[str, list[float]],
+    y: float,
+    font_size: int = 11,
+) -> list[dict[str, Any]]:
+    if not period_order:
+        return []
+
+    x0, x1 = domain["x"]
+    annotations: list[dict[str, Any]] = []
+    for idx, period in enumerate(period_order):
+        x = x0 + (x1 - x0) * (idx / (len(period_order) - 1)) if len(period_order) > 1 else (x0 + x1) / 2.0
+        annotations.append(
+            {
+                "text": period,
+                "xref": "paper",
+                "yref": "paper",
+                "x": x,
+                "y": y,
+                "showarrow": False,
+                "textangle": -18,
+                "font": {"size": font_size, "color": "#374151"},
+            }
+        )
+    return annotations
+
+
 def write_role_sankey_html(
     out_html: Path,
     nodes: pd.DataFrame,
@@ -643,10 +671,18 @@ def write_role_sankey_html(
     field_scope: str,
 ) -> None:
     out_html.parent.mkdir(parents=True, exist_ok=True)
-    trace = build_role_trace(nodes, links, domain={"x": [0.0, 1.0], "y": [0.0, 1.0]})
+    role_domain = {"x": [0.0, 1.0], "y": [0.0, 1.0]}
+    trace = build_role_trace(nodes, links, domain=role_domain)
+    period_annotations = build_period_annotations(
+        period_order=period_order,
+        domain=role_domain,
+        y=1.09,
+        font_size=12,
+    )
 
     payload = {
         "trace": trace,
+        "period_annotations": period_annotations,
         "meta": {
             "periods": period_order,
             "field_scope": field_scope,
@@ -708,7 +744,8 @@ def write_role_sankey_html(
   <script>
     const payload = {json.dumps(payload)};
     const layout = {{
-      margin: {{l: 20, r: 20, t: 20, b: 20}},
+      margin: {{l: 20, r: 20, t: 96, b: 20}},
+      annotations: payload.period_annotations,
       paper_bgcolor: "#ffffff",
       plot_bgcolor: "#ffffff",
       font: {{size: 12, color: "#111827"}}
@@ -747,16 +784,27 @@ def write_role_small_multiples_html(
             continue
         nodes, links = field_frames[field]
         traces.append(build_role_trace(nodes, links, domain=domains[field]))
+        panel_top = domains[field]["y"][1]
+        title_y = panel_top + 0.055
+        period_y = panel_top + 0.015
         annotations.append(
             {
                 "text": f"{field} institutions",
                 "xref": "paper",
                 "yref": "paper",
                 "x": sum(domains[field]["x"]) / 2.0,
-                "y": domains[field]["y"][1] + 0.03,
+                "y": title_y,
                 "showarrow": False,
                 "font": {"size": 13, "color": "#111827"},
             }
+        )
+        annotations.extend(
+            build_period_annotations(
+                period_order=period_order,
+                domain=domains[field],
+                y=period_y,
+                font_size=9,
+            )
         )
     if not traces:
         raise ValueError("No field-specific transitions available for small-multiples Sankey.")
@@ -813,7 +861,7 @@ def write_role_small_multiples_html(
   <script>
     const payload = {json.dumps(payload)};
     const layout = {{
-      margin: {{l: 20, r: 20, t: 40, b: 20}},
+      margin: {{l: 20, r: 20, t: 96, b: 20}},
       annotations: payload.annotations,
       paper_bgcolor: "#ffffff",
       plot_bgcolor: "#ffffff",

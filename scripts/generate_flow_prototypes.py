@@ -282,10 +282,11 @@ def draw_alluvial(
     transition_df: pd.DataFrame,
     stage_labels: list[str],
     states: list[str],
-    title: str,
+    title: str | None,
     state_colors: dict[str, str],
 ) -> None:
-    ax.set_title(title, fontsize=12, pad=10)
+    if title:
+        ax.set_title(title, fontsize=12, pad=10)
     ax.set_xlim(-0.2, len(stage_labels) - 0.8)
     ax.set_ylim(0, 1)
     ax.axis("off")
@@ -480,7 +481,7 @@ def run(
         transition_df=option1_transitions,
         stage_labels=period_order,
         states=ROLE_ORDER,
-        title="Option 1: Institution Role Flow Across Periods (All Fields Combined)",
+        title=None,
         state_colors=ROLE_COLORS,
     )
     option1_path = output_dir / "option1_all_institutions_role_flow.png"
@@ -498,10 +499,9 @@ def run(
             transition_df=tdf,
             stage_labels=period_order,
             states=ROLE_ORDER,
-            title=f"Option 2: {field} Institutions",
+            title=None,
             state_colors=ROLE_COLORS,
         )
-    fig2.suptitle("Field-Specific Role Flows (Small Multiples)", fontsize=14, y=1.01)
     fig2.tight_layout()
     option2_path = output_dir / "option2_field_small_multiples_role_flow.png"
     option2_pdf = output_dir / "option2_field_small_multiples_role_flow.pdf"
