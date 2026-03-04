@@ -20,6 +20,7 @@ if str(SRC_DIR) not in sys.path:
 
 from ai_dentistry.classification import compile_category_patterns, make_classifier
 from ai_dentistry.config import load_protocol
+from ai_dentistry.funding import FUNDING_OUTPUT_ORDER
 from ai_dentistry.network_metrics import (
     annotate_node_types,
     build_collaboration_graph,
@@ -29,7 +30,18 @@ from ai_dentistry.network_metrics import (
 )
 
 ROLE_ORDER = ["Core", "Semi-Peripheral", "Peripheral", "Isolate"]
+ROLE_DISPLAY = {
+    "Core": "High-centrality institutions",
+    "Semi-Peripheral": "Mid-centrality institutions",
+    "Peripheral": "Low-centrality institutions",
+    "Isolate": "Zero-centrality institutions",
+}
 WHO_REGION_ORDER = ["AFRO", "PAHO", "SEARO", "EMRO", "EURO", "WPRO", "Unknown"]
+FUNDING_LABELS = {
+    "US_FEDERAL_FUNDED": "US federally funded",
+    "NON_US_OR_INTL_FUNDED": "Non-US/international funded",
+    "NO_GRANT_LISTED": "No grant listed",
+}
 
 
 def role_labels_from_graph(graph: nx.Graph) -> dict[str, str]:
@@ -303,6 +315,13 @@ def load_core_newcomer(project_root: Path) -> pd.DataFrame:
     return df
 
 
+def load_optional_csv(project_root: Path, relative_path: str) -> pd.DataFrame | None:
+    path = project_root / relative_path
+    if not path.exists():
+        return None
+    return pd.read_csv(path)
+
+
 def fmt_n(value: Any) -> str:
     return f"{int(round(float(value))):,}"
 
@@ -359,6 +378,15 @@ def generate_table(project_root: Path) -> tuple[pd.DataFrame, str]:
     period_graphs = load_graphs(project_root, period_labels)
     region_df = load_region_summary(project_root)
     core_df = load_core_newcomer(project_root)
+    funding_pub_df = load_optional_csv(
+        project_root, "outputs/tables/funding_publication_counts_by_period.csv"
+    )
+    funding_global_df = load_optional_csv(
+        project_root, "outputs/tables/funding_global_network_metrics.csv"
+    )
+    funding_core_df = load_optional_csv(
+        project_root, "outputs/tables/funding_core_newcomer_metrics.csv"
+    )
 
     # Publication-level summaries.
     pub_summary = (
@@ -472,7 +500,7 @@ def generate_table(project_root: Path) -> tuple[pd.DataFrame, str]:
     # Panel B
     rows.append(empty_row("Panel B. Institutional role composition, n (%)", value_cols))
     for role in ROLE_ORDER:
-        row = {"Metric": f"  B{ROLE_ORDER.index(role)+1} {role}, n (%)"}
+        row = {"Metric": f"  B{ROLE_ORDER.index(role)+1} {ROLE_DISPLAY[role]}, n (%)"}
         for col in value_cols:
             row[col] = fmt_n_pct(graph_metrics[col][role], graph_metrics[col]["nodes"])
         rows.append(row)
@@ -630,11 +658,11 @@ def generate_table(project_root: Path) -> tuple[pd.DataFrame, str]:
         [
             ("Active institutions in both periods, n", "active_both"),
             ("Role changes among active institutions, n", "role_change_active"),
-            ("Upward Peripheral -> Semi-Peripheral, n", "p_to_s"),
-            ("Upward Semi-Peripheral -> Core, n", "s_to_c"),
-            ("Downward Core -> lower tiers, n", "core_down"),
-            ("Core retained (Core -> Core), n", "core_keep"),
-            ("Core exits (Core -> Absent), n", "core_exit"),
+            ("Upward Low-centrality institutions -> Mid-centrality institutions, n", "p_to_s"),
+            ("Upward Mid-centrality institutions -> High-centrality institutions, n", "s_to_c"),
+            ("Downward High-centrality institutions -> lower tiers, n", "core_down"),
+            ("High-centrality institutions retained (High -> High), n", "core_keep"),
+            ("High-centrality institution exits (High -> Absent), n", "core_exit"),
             ("Entries (Absent -> active tiers), n", "entry_from_absent"),
             ("Exits (active tiers -> Absent), n", "exit_to_absent"),
         ],
@@ -653,6 +681,114 @@ def generate_table(project_root: Path) -> tuple[pd.DataFrame, str]:
             row[col] = fmt_n(base)
         rows.append(row)
 
+    # Panel I
+    if (
+        funding_pub_df is not None
+        and funding_global_df is not None
+        and not funding_pub_df.empty
+        and not funding_global_df.empty
+    ):
+        funding_pub_df = funding_pub_df.copy()
+        funding_global_df = funding_global_df.copy()
+        if funding_core_df is not None:
+            funding_core_df = funding_core_df.copy()
+
+        funding_pub_df["period"] = funding_pub_df["period"].astype(str)
+        funding_pub_df["funding_category"] = funding_pub_df["funding_category"].astype(str)
+        funding_global_df["period"] = funding_global_df["period"].astype(str)
+        funding_global_df["funding_category"] = funding_global_df["funding_category"].astype(str)
+        if funding_core_df is not None and not funding_core_df.empty:
+            funding_core_df["to"] = funding_core_df["to"].astype(str)
+            funding_core_df["funding_category"] = funding_core_df["funding_category"].astype(str)
+
+        rows.append(empty_row("Panel I. Funding composition, n (%)", value_cols))
+        for idx, category in enumerate(FUNDING_OUTPUT_ORDER, start=1):
+            cat_label = FUNDING_LABELS.get(category, category)
+            row = {"Metric": f"  I{idx} {cat_label}, n (%)"}
+            for col in value_cols:
+                if col == complete_col:
+                    n = float(
+                        funding_pub_df.loc[
+                            funding_pub_df["funding_category"] == category, "publication_count"
+                        ].sum()
+                    )
+                    denom = float(funding_pub_df["publication_count"].sum())
+                else:
+                    n = float(
+                        funding_pub_df.loc[
+                            (funding_pub_df["period"] == col)
+                            & (funding_pub_df["funding_category"] == category),
+                            "publication_count",
+                        ].sum()
+                    )
+                    denom = float(
+                        funding_pub_df.loc[funding_pub_df["period"] == col, "publication_count"].sum()
+                    )
+                row[col] = fmt_n_pct(n, denom)
+            rows.append(row)
+
+        rows.append(empty_row("Panel J. Funding-stratified topology", value_cols))
+        panel_j_idx = 1
+        for category in FUNDING_OUTPUT_ORDER:
+            cat_label = FUNDING_LABELS.get(category, category)
+            for metric_label, metric_key, fmt_kind in [
+                ("Density", "density", "dec"),
+                ("Average degree", "avg_degree", "dec"),
+                ("Largest connected component share, %", "largest_connected_component_size", "lcc"),
+            ]:
+                row = {"Metric": f"  J{panel_j_idx} {cat_label}: {metric_label}"}
+                for col in value_cols:
+                    if col == complete_col:
+                        sub = funding_global_df[funding_global_df["funding_category"] == category]
+                    else:
+                        sub = funding_global_df[
+                            (funding_global_df["period"] == col)
+                            & (funding_global_df["funding_category"] == category)
+                        ]
+                    if sub.empty:
+                        row[col] = "0.000" if fmt_kind != "lcc" else "0.0%"
+                        continue
+                    if fmt_kind == "dec":
+                        row[col] = fmt_dec(float(sub[metric_key].mean()))
+                    else:
+                        nodes = float(sub["nodes"].sum())
+                        lcc = float(sub["largest_connected_component_size"].sum())
+                        pct = (100.0 * lcc / nodes) if nodes > 0 else 0.0
+                        row[col] = fmt_pct(pct)
+                rows.append(row)
+                panel_j_idx += 1
+
+        if funding_core_df is not None and not funding_core_df.empty:
+            rows.append(empty_row("Panel K. Funding-stratified newcomer-returning dynamics", value_cols))
+            panel_k_idx = 1
+            for category in FUNDING_OUTPUT_ORDER:
+                cat_label = FUNDING_LABELS.get(category, category)
+                cat_core = funding_core_df[funding_core_df["funding_category"] == category].copy()
+                to_lookup = {str(r["to"]): r for _, r in cat_core.iterrows()}
+                for metric_label, key, style in [
+                    ("New institutions, n", "new_nodes", "n"),
+                    ("Returning institutions, n", "returning_nodes", "n"),
+                    ("Edge growth per new institution", "edge_growth_per_new", "dec"),
+                ]:
+                    row = {"Metric": f"  K{panel_k_idx} {cat_label}: {metric_label}"}
+                    for col in value_cols:
+                        if col == complete_col:
+                            if style == "n":
+                                base = float(cat_core[key].sum()) if not cat_core.empty else 0.0
+                            else:
+                                base = float(cat_core[key].mean()) if not cat_core.empty else 0.0
+                        else:
+                            if col == period_labels[0]:
+                                row[col] = "—"
+                                continue
+                            if col not in to_lookup:
+                                row[col] = "—"
+                                continue
+                            base = float(to_lookup[col][key])
+                        row[col] = fmt_n(base) if style == "n" else fmt_dec(base)
+                    rows.append(row)
+                    panel_k_idx += 1
+
     table_df = pd.DataFrame(rows, columns=["Metric", *value_cols])
 
     notes = [
@@ -664,6 +800,9 @@ def generate_table(project_root: Path) -> tuple[pd.DataFrame, str]:
         "5) Panel G complete-period values are transition aggregates: counts are sums across adjacent transitions; density and edge-growth terms are transition means.",
         "6) WHO-region publication percentages are calculated relative to total region-linked publication counts within each column.",
         "7) Panel H values are institution-level role transitions between adjacent periods; complete-period values are sums across all adjacent transitions.",
+        "8) Role tier labels in this table use centrality-forward naming: High-centrality (Core), Mid-centrality (Semi-Peripheral), Low-centrality (Peripheral), and Zero-centrality (Isolate).",
+        "9) Funding categories are hierarchical: any US federal signal -> US federally funded; otherwise grant-listed records -> Non-US/international funded; empty GR field -> No grant listed.",
+        "10) US federal signal is detected via configurable keyword whitelist (e.g., NIH/HHS/NSF/CDC/VA/DoD).",
     ]
     markdown = markdown_table(table_df) + "\n" + "\n".join(notes) + "\n"
     return table_df, markdown

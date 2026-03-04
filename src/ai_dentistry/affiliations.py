@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 from dateutil import parser
 
+from ai_dentistry.funding import classify_funding, extract_grant_entries
 from ai_dentistry.geography import extract_country_from_affiliation
 
 INSTITUTION_EXTRACTION_MODE_EXACT = "exact_affiliation"
@@ -153,6 +154,7 @@ def transform_records_to_publications(
     keyword_hints: list[str],
     remove_punctuation: bool = True,
     extraction_mode: str = INSTITUTION_EXTRACTION_MODE_EXACT,
+    funding_cfg: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for record in records:
@@ -172,6 +174,12 @@ def transform_records_to_publications(
         if not institutions:
             continue
 
+        grant_entries = extract_grant_entries(record)
+        funding_category, funding_flags = classify_funding(
+            grant_entries=grant_entries,
+            policy_cfg=funding_cfg,
+        )
+
         output.append(
             {
                 "pmid": str(record.get("PMID", "")).strip(),
@@ -182,6 +190,10 @@ def transform_records_to_publications(
                 "institutions": institutions,
                 "countries": countries,
                 "institution_country_pairs": entries,
+                "grant_entries": grant_entries,
+                "funding_category": funding_category,
+                "funding_flags": funding_flags.as_dict(),
+                "has_grant_support": bool(funding_flags.has_grant_support),
             }
         )
     return output

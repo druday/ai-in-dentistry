@@ -47,6 +47,24 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Delete existing generated graph/html/centrality files before writing new outputs.",
     )
+    parser.add_argument(
+        "--with-funding",
+        dest="with_funding",
+        action="store_true",
+        default=True,
+        help="Enable funding-stratified analysis outputs (default: enabled).",
+    )
+    parser.add_argument(
+        "--no-funding",
+        dest="with_funding",
+        action="store_false",
+        help="Disable funding-stratified analysis outputs.",
+    )
+    parser.add_argument(
+        "--funding-policy",
+        default=None,
+        help="Optional override for funding.classification_policy (e.g., hierarchical_3_level).",
+    )
     return parser.parse_args()
 
 
@@ -58,6 +76,8 @@ def main() -> None:
         project_root=args.project_root,
         period_mode_override=args.period_mode,
         clean_output_dirs=args.clean_output,
+        with_funding=bool(args.with_funding),
+        funding_policy_override=args.funding_policy,
     )
     print(json.dumps(summary, indent=2))
 

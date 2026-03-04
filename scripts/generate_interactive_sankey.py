@@ -43,6 +43,13 @@ FIELD_ORDER = ["Dental", "Medical", "Technical", "Other"]
 
 ROLE_ORDER = ["Core", "Semi-Peripheral", "Peripheral", "Isolate"]
 ROLE_ORDER_WITH_ABSENT = ROLE_ORDER + ["Absent"]
+ROLE_DISPLAY = {
+    "Core": "High-centrality institutions",
+    "Semi-Peripheral": "Mid-centrality institutions",
+    "Peripheral": "Low-centrality institutions",
+    "Isolate": "Zero-centrality institutions",
+    "Absent": "Absent",
+}
 ROLE_COLORS = {
     "Core": "#1f77b4",
     "Semi-Peripheral": "#17becf",
@@ -63,6 +70,10 @@ def hex_to_rgba(color: str, alpha: float) -> str:
     except ValueError:
         return f"rgba(156,163,175,{alpha})"
     return f"rgba({r},{g},{b},{alpha})"
+
+
+def display_role(role: str) -> str:
+    return ROLE_DISPLAY.get(str(role), str(role))
 
 
 def resolve_graph_dir(protocol: dict[str, Any], project_root: Path) -> Path:
@@ -527,7 +538,8 @@ def build_role_sankey_frames(
             if out_val <= 0 and in_val <= 0:
                 continue
             x_pos = period_index[period] / (len(period_order) - 1) if len(period_order) > 1 else 0.5
-            y_pos = 0.5 if len(states) == 1 else 0.08 + 0.84 * (state_index[state] / (len(states) - 1))
+            # Keep nodes away from absolute top/bottom to prevent clipping at some browser zoom levels.
+            y_pos = 0.5 if len(states) == 1 else 0.06 + 0.82 * (state_index[state] / (len(states) - 1))
             node_rows.append(
                 {
                     "period": period,
@@ -586,32 +598,45 @@ def build_role_sankey_frames(
     return nodes, links
 
 
-def build_role_trace(nodes: pd.DataFrame, links: pd.DataFrame, domain: dict[str, list[float]]) -> dict[str, Any]:
+def build_role_trace(
+    nodes: pd.DataFrame,
+    links: pd.DataFrame,
+    domain: dict[str, list[float]],
+    arrangement: str = "fixed",
+    include_y: bool = True,
+) -> dict[str, Any]:
+    node_role_labels = [display_role(role) for role in nodes["role"].astype(str).tolist()]
+    link_source_labels = [display_role(role) for role in links["state_from"].astype(str).tolist()]
+    link_target_labels = [display_role(role) for role in links["state_to"].astype(str).tolist()]
+    node_dict: dict[str, Any] = {
+        "pad": 12,
+        "thickness": 14,
+        "label": node_role_labels,
+        "color": [ROLE_COLORS.get(role, "#9ca3af") for role in nodes["role"].astype(str)],
+        "line": {"color": "#ffffff", "width": 1},
+        "x": [round(v, 6) for v in nodes["x"].tolist()],
+        "customdata": np_stack(
+            nodes["period"].astype(str).tolist(),
+            node_role_labels,
+            nodes["role"].astype(str).tolist(),
+            [int(v) for v in nodes["incoming"].tolist()],
+            [int(v) for v in nodes["outgoing"].tolist()],
+        ),
+        "hovertemplate": (
+            "<b>%{customdata[1]}</b><br>"
+            "Period: %{customdata[0]}<br>"
+            "Incoming: %{customdata[3]}<br>"
+            "Outgoing: %{customdata[4]}<extra></extra>"
+        ),
+    }
+    if include_y:
+        node_dict["y"] = [round(v, 6) for v in nodes["y"].tolist()]
+
     return {
         "type": "sankey",
-        "arrangement": "fixed",
+        "arrangement": arrangement,
         "domain": domain,
-        "node": {
-            "pad": 12,
-            "thickness": 14,
-            "label": nodes["role"].astype(str).tolist(),
-            "color": [ROLE_COLORS.get(role, "#9ca3af") for role in nodes["role"].astype(str)],
-            "line": {"color": "#ffffff", "width": 1},
-            "x": [round(v, 6) for v in nodes["x"].tolist()],
-            "y": [round(v, 6) for v in nodes["y"].tolist()],
-            "customdata": np_stack(
-                nodes["period"].astype(str).tolist(),
-                nodes["role"].astype(str).tolist(),
-                [int(v) for v in nodes["incoming"].tolist()],
-                [int(v) for v in nodes["outgoing"].tolist()],
-            ),
-            "hovertemplate": (
-                "<b>%{customdata[1]}</b><br>"
-                "Period: %{customdata[0]}<br>"
-                "Incoming: %{customdata[2]}<br>"
-                "Outgoing: %{customdata[3]}<extra></extra>"
-            ),
-        },
+        "node": node_dict,
         "link": {
             "source": [int(v) for v in links["source"].tolist()],
             "target": [int(v) for v in links["target"].tolist()],
@@ -620,8 +645,8 @@ def build_role_trace(nodes: pd.DataFrame, links: pd.DataFrame, domain: dict[str,
             "customdata": np_stack(
                 links["period_from"].astype(str).tolist(),
                 links["period_to"].astype(str).tolist(),
-                links["state_from"].astype(str).tolist(),
-                links["state_to"].astype(str).tolist(),
+                link_source_labels,
+                link_target_labels,
                 [float(v) for v in links["pct_source"].tolist()],
             ),
             "hovertemplate": (
@@ -671,12 +696,18 @@ def write_role_sankey_html(
     field_scope: str,
 ) -> None:
     out_html.parent.mkdir(parents=True, exist_ok=True)
-    role_domain = {"x": [0.0, 1.0], "y": [0.0, 1.0]}
-    trace = build_role_trace(nodes, links, domain=role_domain)
+    role_domain = {"x": [0.0, 1.0], "y": [0.02, 0.98]}
+    trace = build_role_trace(
+        nodes=nodes,
+        links=links,
+        domain=role_domain,
+        arrangement="snap",
+        include_y=False,
+    )
     period_annotations = build_period_annotations(
         period_order=period_order,
         domain=role_domain,
-        y=1.09,
+    y=1.085,
         font_size=12,
     )
 
@@ -693,7 +724,7 @@ def write_role_sankey_html(
     }
 
     role_legend_html = "".join(
-        f'<div class="legend-group"><span class="chip" style="background:{ROLE_COLORS[role]}"></span>{role}</div>'
+        f'<div class="legend-group"><span class="chip" style="background:{ROLE_COLORS[role]}"></span>{display_role(role)}</div>'
         for role in (ROLE_ORDER_WITH_ABSENT if include_absent else ROLE_ORDER)
     )
 
@@ -718,7 +749,9 @@ def write_role_sankey_html(
     .chip {{ width: 14px; height: 14px; border-radius: 2px; display: inline-block; }}
     #chart {{
       width: 100%;
-      height: 860px;
+      max-width: 1500px;
+      margin: 0 auto;
+      height: 1040px;
       border: 1px solid #e5e7eb;
       background: #ffffff;
       border-radius: 8px;
@@ -744,7 +777,7 @@ def write_role_sankey_html(
   <script>
     const payload = {json.dumps(payload)};
     const layout = {{
-      margin: {{l: 20, r: 20, t: 96, b: 20}},
+      margin: {{l: 20, r: 20, t: 96, b: 40}},
       annotations: payload.period_annotations,
       paper_bgcolor: "#ffffff",
       plot_bgcolor: "#ffffff",
@@ -771,10 +804,10 @@ def write_role_small_multiples_html(
     out_html.parent.mkdir(parents=True, exist_ok=True)
 
     domains = {
-        "Dental": {"x": [0.00, 0.48], "y": [0.54, 1.00]},
-        "Medical": {"x": [0.52, 1.00], "y": [0.54, 1.00]},
-        "Technical": {"x": [0.00, 0.48], "y": [0.00, 0.46]},
-        "Other": {"x": [0.52, 1.00], "y": [0.00, 0.46]},
+        "Dental": {"x": [0.00, 0.48], "y": [0.53, 0.97]},
+        "Medical": {"x": [0.52, 1.00], "y": [0.53, 0.97]},
+        "Technical": {"x": [0.00, 0.48], "y": [0.03, 0.47]},
+        "Other": {"x": [0.52, 1.00], "y": [0.03, 0.47]},
     }
 
     traces: list[dict[str, Any]] = []
@@ -783,7 +816,15 @@ def write_role_small_multiples_html(
         if field not in field_frames:
             continue
         nodes, links = field_frames[field]
-        traces.append(build_role_trace(nodes, links, domain=domains[field]))
+        traces.append(
+            build_role_trace(
+                nodes=nodes,
+                links=links,
+                domain=domains[field],
+                arrangement="snap",
+                include_y=False,
+            )
+        )
         panel_top = domains[field]["y"][1]
         title_y = panel_top + 0.055
         period_y = panel_top + 0.015
@@ -810,7 +851,7 @@ def write_role_small_multiples_html(
         raise ValueError("No field-specific transitions available for small-multiples Sankey.")
 
     role_legend_html = "".join(
-        f'<div class="legend-group"><span class="chip" style="background:{ROLE_COLORS[role]}"></span>{role}</div>'
+        f'<div class="legend-group"><span class="chip" style="background:{ROLE_COLORS[role]}"></span>{display_role(role)}</div>'
         for role in (ROLE_ORDER_WITH_ABSENT if include_absent else ROLE_ORDER)
     )
 
@@ -836,7 +877,9 @@ def write_role_small_multiples_html(
     .chip {{ width: 14px; height: 14px; border-radius: 2px; display: inline-block; }}
     #chart {{
       width: 100%;
-      height: 980px;
+      max-width: 1500px;
+      margin: 0 auto;
+      height: 1120px;
       border: 1px solid #e5e7eb;
       background: #ffffff;
       border-radius: 8px;
@@ -861,7 +904,7 @@ def write_role_small_multiples_html(
   <script>
     const payload = {json.dumps(payload)};
     const layout = {{
-      margin: {{l: 20, r: 20, t: 96, b: 20}},
+      margin: {{l: 20, r: 20, t: 96, b: 28}},
       annotations: payload.annotations,
       paper_bgcolor: "#ffffff",
       plot_bgcolor: "#ffffff",
@@ -872,6 +915,404 @@ def write_role_small_multiples_html(
       responsive: true,
       modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d"]
     }});
+  </script>
+</body>
+</html>
+"""
+    out_html.write_text(html, encoding="utf-8")
+
+
+def write_role_timeline_html(
+    out_html: Path,
+    transitions: pd.DataFrame,
+    period_order: list[str],
+    include_absent: bool,
+    field_scope: str,
+) -> None:
+    out_html.parent.mkdir(parents=True, exist_ok=True)
+    state_order = ROLE_ORDER_WITH_ABSENT if include_absent else ROLE_ORDER
+    period_pairs = [
+        {
+            "pair_index": idx,
+            "period_from": left,
+            "period_to": right,
+        }
+        for idx, (left, right) in enumerate(zip(period_order[:-1], period_order[1:], strict=False))
+    ]
+    transitions_payload = [
+        {
+            "pair_index": int(row["pair_index"]),
+            "period_from": str(row["period_from"]),
+            "period_to": str(row["period_to"]),
+            "state_from": str(row["state_from"]),
+            "state_to": str(row["state_to"]),
+            "state_from_label": display_role(str(row["state_from"])),
+            "state_to_label": display_role(str(row["state_to"])),
+            "value": int(row["value"]),
+        }
+        for _, row in transitions.iterrows()
+    ]
+    payload = {
+        "state_order": state_order,
+        "role_display": {role: display_role(role) for role in ROLE_ORDER_WITH_ABSENT},
+        "role_colors": ROLE_COLORS,
+        "period_pairs": period_pairs,
+        "transitions": transitions_payload,
+        "field_scope": field_scope,
+        "include_absent": bool(include_absent),
+    }
+
+    role_filter_html = "".join(
+        (
+            f'<label class="filter-item">'
+            f'<input type="checkbox" class="role-filter" data-role="{role}" checked />'
+            f'<span class="chip" style="background:{ROLE_COLORS.get(role, "#9ca3af")}"></span>'
+            f'{display_role(role)}'
+            f"</label>"
+        )
+        for role in state_order
+    )
+
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Role Flow Timeline</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      color: #111827;
+      background: #f8fafc;
+    }}
+    .subtitle {{ color: #4b5563; font-size: 14px; margin-bottom: 12px; }}
+    .toolbar {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      align-items: center;
+      margin-bottom: 12px;
+    }}
+    .controls {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }}
+    .btn {{
+      border: 1px solid #d1d5db;
+      background: #ffffff;
+      color: #111827;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }}
+    .btn:hover {{
+      background: #f3f4f6;
+    }}
+    #pair-slider {{
+      width: 260px;
+    }}
+    #pair-label {{
+      font-weight: 600;
+      font-size: 13px;
+      color: #111827;
+      min-width: 180px;
+    }}
+    .filters {{
+      display: flex;
+      gap: 10px 14px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 12px;
+    }}
+    .filter-title {{
+      font-weight: 600;
+      margin-right: 2px;
+    }}
+    .filter-item {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }}
+    .chip {{
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      display: inline-block;
+    }}
+    #chart {{
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      height: 860px;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+      border-radius: 8px;
+    }}
+    .meta {{
+      margin-top: 10px;
+      color: #6b7280;
+      font-size: 12px;
+    }}
+  </style>
+</head>
+<body>
+  <h2 style="margin:0 0 4px;">Playable Institution Role-Flow Timeline</h2>
+  <div class="subtitle">
+    Animated adjacent-period Sankey view ({field_scope}). Use role filters and Play to explore evolution over time.
+  </div>
+
+  <div class="toolbar">
+    <div class="controls">
+      <button id="play-btn" class="btn">Play</button>
+      <button id="prev-btn" class="btn">Prev</button>
+      <button id="next-btn" class="btn">Next</button>
+      <input id="pair-slider" type="range" min="0" max="0" value="0" step="1" />
+      <span id="pair-label"></span>
+    </div>
+    <div class="filters" id="filters">
+      <span class="filter-title">Roles:</span>
+      {role_filter_html}
+    </div>
+  </div>
+
+  <div id="chart"></div>
+  <div class="meta">
+    Field scope: {field_scope} |
+    Include Absent transitions: {str(include_absent).lower()} |
+    Timeline steps: adjacent period pairs only
+  </div>
+
+  <script>
+    const payload = {json.dumps(payload)};
+    const stateOrder = payload.state_order;
+    const roleDisplay = payload.role_display;
+    const roleColors = payload.role_colors;
+    const periodPairs = payload.period_pairs;
+    const allTransitions = payload.transitions;
+    const selectedStates = new Set(stateOrder);
+    const pairLabel = document.getElementById("pair-label");
+    const slider = document.getElementById("pair-slider");
+    const playBtn = document.getElementById("play-btn");
+    const prevBtn = document.getElementById("prev-btn");
+    const nextBtn = document.getElementById("next-btn");
+    let currentPair = 0;
+    let timer = null;
+
+    function hexToRgba(hex, alpha) {{
+      const h = String(hex || "").replace("#", "");
+      if (h.length !== 6) return `rgba(156,163,175,${{alpha}})`;
+      const r = parseInt(h.slice(0, 2), 16);
+      const g = parseInt(h.slice(2, 4), 16);
+      const b = parseInt(h.slice(4, 6), 16);
+      return `rgba(${{r}},${{g}},${{b}},${{alpha}})`;
+    }}
+
+    function stateYPositions(n) {{
+      if (n <= 1) return [0.5];
+      const out = [];
+      for (let i = 0; i < n; i += 1) {{
+        out.push(0.08 + (0.84 * i) / (n - 1));
+      }}
+      return out;
+    }}
+
+    function buildTrace(pairIndex) {{
+      const pair = periodPairs[pairIndex];
+      const states = stateOrder.filter((s) => selectedStates.has(s));
+      if (!pair || states.length === 0) {{
+        return null;
+      }}
+
+      const rows = allTransitions.filter(
+        (r) =>
+          r.pair_index === pairIndex &&
+          selectedStates.has(r.state_from) &&
+          selectedStates.has(r.state_to)
+      );
+
+      const leftIds = states.map((s) => `L||${{s}}`);
+      const rightIds = states.map((s) => `R||${{s}}`);
+      const nodeIds = [...leftIds, ...rightIds];
+      const idxMap = new Map(nodeIds.map((id, idx) => [id, idx]));
+      const y = stateYPositions(states.length);
+      const x = [...states.map(() => 0.03), ...states.map(() => 0.97)];
+      const labels = [...states.map((s) => roleDisplay[s] || s), ...states.map((s) => roleDisplay[s] || s)];
+
+      const outgoing = new Map(states.map((s) => [s, 0]));
+      const incoming = new Map(states.map((s) => [s, 0]));
+      const sourceTotals = new Map(states.map((s) => [s, 0]));
+      rows.forEach((r) => {{
+        outgoing.set(r.state_from, (outgoing.get(r.state_from) || 0) + r.value);
+        incoming.set(r.state_to, (incoming.get(r.state_to) || 0) + r.value);
+        sourceTotals.set(r.state_from, (sourceTotals.get(r.state_from) || 0) + r.value);
+      }});
+
+      const sources = [];
+      const targets = [];
+      const values = [];
+      const colors = [];
+      const custom = [];
+      rows.forEach((r) => {{
+        const src = idxMap.get(`L||${{r.state_from}}`);
+        const dst = idxMap.get(`R||${{r.state_to}}`);
+        if (src === undefined || dst === undefined) return;
+        sources.push(src);
+        targets.push(dst);
+        values.push(r.value);
+        colors.push(hexToRgba(roleColors[r.state_from], 0.36));
+        const pct = sourceTotals.get(r.state_from) > 0 ? (100 * r.value) / sourceTotals.get(r.state_from) : 0;
+        custom.push([r.state_from_label, r.state_to_label, pct.toFixed(2)]);
+      }});
+
+      const nodeCustom = [
+        ...states.map((s) => [pair.period_from, roleDisplay[s] || s, outgoing.get(s) || 0]),
+        ...states.map((s) => [pair.period_to, roleDisplay[s] || s, incoming.get(s) || 0]),
+      ];
+
+      return {{
+        type: "sankey",
+        arrangement: "snap",
+        node: {{
+          pad: 14,
+          thickness: 16,
+          label: labels,
+          color: [...states.map((s) => roleColors[s]), ...states.map((s) => roleColors[s])],
+          line: {{ color: "#ffffff", width: 1 }},
+          x: x,
+          y: [...y, ...y],
+          customdata: nodeCustom,
+          hovertemplate:
+            "<b>%{{customdata[1]}}</b><br>" +
+            "Period: %{{customdata[0]}}<br>" +
+            "Flow total: %{{customdata[2]}}<extra></extra>",
+        }},
+        link: {{
+          source: sources,
+          target: targets,
+          value: values,
+          color: colors,
+          customdata: custom,
+          hovertemplate:
+            "From: %{{customdata[0]}}<br>" +
+            "To: %{{customdata[1]}}<br>" +
+            "Institutions: %{{value}}<br>" +
+            "Share of source role: %{{customdata[2]}}%<extra></extra>",
+        }},
+      }};
+    }}
+
+    function render() {{
+      const pair = periodPairs[currentPair];
+      if (!pair) {{
+        pairLabel.textContent = "No period pairs available";
+        Plotly.react("chart", [], {{ margin: {{l: 20, r: 20, t: 40, b: 20}} }}, {{ displaylogo: false }});
+        return;
+      }}
+      slider.value = String(currentPair);
+      pairLabel.textContent = `${{pair.period_from}} -> ${{pair.period_to}}`;
+      const trace = buildTrace(currentPair);
+      const layout = {{
+        margin: {{l: 20, r: 20, t: 72, b: 20}},
+        paper_bgcolor: "#ffffff",
+        plot_bgcolor: "#ffffff",
+        font: {{size: 12, color: "#111827"}},
+        annotations: [
+          {{
+            text: pair.period_from,
+            x: 0.03,
+            y: 1.04,
+            xref: "paper",
+            yref: "paper",
+            showarrow: false,
+            xanchor: "left",
+            font: {{size: 12, color: "#374151"}},
+          }},
+          {{
+            text: pair.period_to,
+            x: 0.97,
+            y: 1.04,
+            xref: "paper",
+            yref: "paper",
+            showarrow: false,
+            xanchor: "right",
+            font: {{size: 12, color: "#374151"}},
+          }},
+        ],
+      }};
+      Plotly.react("chart", trace ? [trace] : [], layout, {{
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d"],
+      }});
+    }}
+
+    function stopPlayback() {{
+      if (timer) {{
+        window.clearInterval(timer);
+        timer = null;
+      }}
+      playBtn.textContent = "Play";
+    }}
+
+    function step(delta) {{
+      if (periodPairs.length === 0) return;
+      currentPair = (currentPair + delta + periodPairs.length) % periodPairs.length;
+      render();
+    }}
+
+    slider.max = String(Math.max(periodPairs.length - 1, 0));
+    slider.addEventListener("input", () => {{
+      stopPlayback();
+      currentPair = Number(slider.value);
+      render();
+    }});
+
+    playBtn.addEventListener("click", () => {{
+      if (timer) {{
+        stopPlayback();
+        return;
+      }}
+      playBtn.textContent = "Pause";
+      timer = window.setInterval(() => {{
+        currentPair = (currentPair + 1) % Math.max(periodPairs.length, 1);
+        render();
+      }}, 1700);
+    }});
+
+    prevBtn.addEventListener("click", () => {{
+      stopPlayback();
+      step(-1);
+    }});
+    nextBtn.addEventListener("click", () => {{
+      stopPlayback();
+      step(1);
+    }});
+
+    document.querySelectorAll(".role-filter").forEach((cb) => {{
+      cb.addEventListener("change", (ev) => {{
+        const role = ev.target.getAttribute("data-role");
+        if (ev.target.checked) {{
+          selectedStates.add(role);
+        }} else {{
+          if (selectedStates.size === 1) {{
+            ev.target.checked = true;
+            return;
+          }}
+          selectedStates.delete(role);
+        }}
+        stopPlayback();
+        render();
+      }});
+    }});
+
+    render();
   </script>
 </body>
 </html>
@@ -948,6 +1389,16 @@ def parse_args() -> argparse.Namespace:
         "--field-small-multiples-html",
         default=None,
         help="Role mode: output path for 2x2 field-specific Sankey HTML.",
+    )
+    parser.add_argument(
+        "--write-playable-timeline",
+        action="store_true",
+        help="Role mode: additionally generate a playable adjacent-period Sankey timeline with role filters.",
+    )
+    parser.add_argument(
+        "--playable-timeline-html",
+        default=None,
+        help="Role mode: output path for playable timeline HTML.",
     )
 
     return parser.parse_args()
@@ -1039,9 +1490,19 @@ def main() -> None:
         node_csv = out_html.with_name(out_html.stem + "_nodes.csv")
         link_csv = out_html.with_name(out_html.stem + "_links.csv")
         transitions_csv = out_html.with_name(out_html.stem + "_transitions.csv")
-        nodes.to_csv(node_csv, index=False)
-        links.to_csv(link_csv, index=False)
-        transitions.to_csv(transitions_csv, index=False)
+        nodes_export = nodes.copy()
+        links_export = links.copy()
+        transitions_export = transitions.copy()
+        nodes_export["role_label"] = nodes_export["role"].astype(str).map(display_role)
+        links_export["state_from_label"] = links_export["state_from"].astype(str).map(display_role)
+        links_export["state_to_label"] = links_export["state_to"].astype(str).map(display_role)
+        transitions_export["state_from_label"] = (
+            transitions_export["state_from"].astype(str).map(display_role)
+        )
+        transitions_export["state_to_label"] = transitions_export["state_to"].astype(str).map(display_role)
+        nodes_export.to_csv(node_csv, index=False)
+        links_export.to_csv(link_csv, index=False)
+        transitions_export.to_csv(transitions_csv, index=False)
         outputs["nodes_csv"] = str(node_csv)
         outputs["links_csv"] = str(link_csv)
         outputs["transitions_csv"] = str(transitions_csv)
@@ -1080,6 +1541,31 @@ def main() -> None:
             )
             outputs["field_small_multiples_html"] = str(fields_html)
             outputs["field_small_multiples_fields"] = sorted(field_frames.keys())
+
+    if args.write_playable_timeline:
+        if args.playable_timeline_html:
+            timeline_html = Path(args.playable_timeline_html).resolve()
+        else:
+            timeline_html = out_html.with_name(out_html.stem + "_timeline.html")
+        write_role_timeline_html(
+            out_html=timeline_html,
+            transitions=transitions,
+            period_order=period_order,
+            include_absent=bool(args.include_absent),
+            field_scope=field_scope,
+        )
+        outputs["playable_timeline_html"] = str(timeline_html)
+        if args.save_data_csv:
+            timeline_transitions = transitions.copy()
+            timeline_transitions["state_from_label"] = (
+                timeline_transitions["state_from"].astype(str).map(display_role)
+            )
+            timeline_transitions["state_to_label"] = (
+                timeline_transitions["state_to"].astype(str).map(display_role)
+            )
+            timeline_csv = timeline_html.with_name(timeline_html.stem + "_transitions.csv")
+            timeline_transitions.to_csv(timeline_csv, index=False)
+            outputs["playable_timeline_transitions_csv"] = str(timeline_csv)
 
     print(json.dumps(outputs, indent=2))
 

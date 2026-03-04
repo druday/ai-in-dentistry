@@ -13,6 +13,7 @@ PubMed search is explicitly hard-capped to **2025-12-31** to exclude 2026 public
 ```text
 config/
   protocol.yaml                 # frozen protocol: queries, periods, keywords, outputs
+apps/web/                       # React frontend for reproducible controls + run orchestration
 data/
   raw/                          # PubMed snapshots (JSONL; generated, gitignored)
   interim/                      # intermediate artifacts (generated, gitignored)
@@ -31,6 +32,7 @@ scripts/
   run_pipeline.py               # end-to-end preprocessing + analysis
 src/ai_dentistry/
   package modules implementing the pipeline
+  api/app.py                    # FastAPI service for frontend + run jobs
 tests/
   unit tests for method-critical logic
 ```
@@ -43,6 +45,7 @@ tests/
 4. Deterministic institution extraction from raw PubMed affiliation strings (exact mode by default) with within-publication deduplication.
 5. Explicit institutional domain classification rules (Dental/Medical/Technical/Other).
 6. Re-runnable metrics pipeline that writes standardized CSV/GraphML outputs.
+7. Funding-stratified network analyses with hierarchical 3-level classification and auditable grant flags.
 
 ## Quick start
 
@@ -77,6 +80,8 @@ python scripts/fetch_pubmed.py \
 python scripts/run_pipeline.py \
   --protocol config/protocol.yaml \
   --raw-glob "data/raw/pubmed_records_ai_dentistry_*.jsonl" \
+  --period-mode dynamic \
+  --with-funding \
   --clean-output
 ```
 
@@ -115,6 +120,32 @@ ruff check .
 pytest
 ```
 
+## Local full-stack app (API + React)
+
+### 1) Start backend API
+
+```bash
+python scripts/run_api.py --host 127.0.0.1 --port 8000 --reload
+```
+
+### 2) Start frontend
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+Open the UI at `http://127.0.0.1:5173`.
+
+The frontend exposes:
+- query blocks (add/remove/edit),
+- dynamic/fixed period controls and publication-count previews,
+- classification keyword editing,
+- preprocessing mode toggles,
+- funding whitelist editing,
+- run execution with live logs and artifact listing.
+
 ## Outputs
 
 Primary generated outputs:
@@ -125,11 +156,20 @@ Primary generated outputs:
 - `outputs/tables/core_newcomer_metrics.csv`
 - `outputs/tables/cluster_interdisciplinarity_metrics.csv`
 - `outputs/tables/who_region_summary.csv`
+- `outputs/tables/funding_publication_counts_by_period.csv`
+- `outputs/tables/funding_global_network_metrics.csv`
+- `outputs/tables/funding_core_newcomer_metrics.csv`
+- `outputs/tables/funding_cluster_interdisciplinarity_metrics.csv`
+- `outputs/tables/funding_who_region_summary.csv`
+- `outputs/tables/funding_role_transition_counts.csv`
+- `outputs/tables/funding_structural_comparison_summary.csv`
 - `outputs/tables/table_descriptive_by_period.csv`
 - `outputs/tables/table_descriptive_by_period.md`
 - `outputs/tables/period_definitions.csv`
 - `outputs/networks/institutions_<period>.graphml`
 - `outputs/networks_html/institutions_<period>.html`
+- `outputs/figures/flow_options/funding/*_role_flow_sankey.html`
+- `outputs/runs/<timestamp>/run_manifest.json`
 
 Flow visualization prototypes:
 

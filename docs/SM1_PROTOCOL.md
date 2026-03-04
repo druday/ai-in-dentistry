@@ -39,6 +39,21 @@ Configured in `config/protocol.yaml` under:
 
 Institutions not matching these keyword sets are assigned to `Other`.
 
+## Funding classification protocol
+
+Configured in `config/protocol.yaml` under `funding`.
+
+- `classification_policy: hierarchical_3_level`
+- Categories:
+  - `US_FEDERAL_FUNDED`
+  - `NON_US_OR_INTL_FUNDED`
+  - `NO_GRANT_LISTED`
+- US federal detection uses configurable `funding.us_federal_keywords` (default includes NIH/HHS/NSF/CDC/VA/DoD terms).
+- Rule hierarchy:
+  1. Any US federal signal in PubMed `GR` entries -> `US_FEDERAL_FUNDED`
+  2. Else any grant listed -> `NON_US_OR_INTL_FUNDED`
+  3. Else -> `NO_GRANT_LISTED`
+
 ## Notes
 
 - Default implementation uses exact raw affiliation strings as institution labels, with within-record deduplication.

@@ -7,6 +7,8 @@ from typing import Any, Iterable
 
 import yaml
 
+from ai_dentistry.funding import FUNDING_OUTPUT_ORDER
+
 
 @dataclass(frozen=True)
 class Period:
@@ -20,14 +22,7 @@ class Period:
         return self.start_year <= year <= self.end_year
 
 
-def load_protocol(path: str | Path) -> dict[str, Any]:
-    protocol_path = Path(path)
-    if not protocol_path.exists():
-        raise FileNotFoundError(f"Protocol file not found: {protocol_path}")
-
-    with protocol_path.open("r", encoding="utf-8") as handle:
-        data = yaml.safe_load(handle)
-
+def validate_protocol_dict(data: dict[str, Any]) -> None:
     if not isinstance(data, dict):
         raise ValueError("Protocol file must parse to a mapping at the top level.")
 
@@ -38,6 +33,43 @@ def load_protocol(path: str | Path) -> dict[str, Any]:
 
     if "periods" not in data and "temporal_segmentation" not in data:
         raise ValueError("Protocol must define either 'periods' or 'temporal_segmentation'.")
+
+    funding_cfg = data.get("funding")
+    if funding_cfg is not None:
+        if not isinstance(funding_cfg, dict):
+            raise ValueError("Protocol key 'funding' must be a mapping when provided.")
+        if "classification_policy" in funding_cfg:
+            policy = str(funding_cfg["classification_policy"]).strip().lower()
+            if policy not in {"hierarchical_3_level"}:
+                raise ValueError(
+                    "funding.classification_policy must be 'hierarchical_3_level'."
+                )
+        if "us_federal_keywords" in funding_cfg and not isinstance(
+            funding_cfg["us_federal_keywords"], list
+        ):
+            raise ValueError("funding.us_federal_keywords must be a list of strings.")
+        if "output_categories" in funding_cfg:
+            output_categories = funding_cfg["output_categories"]
+            if not isinstance(output_categories, list):
+                raise ValueError("funding.output_categories must be a list of category strings.")
+            unsupported = {
+                str(value).strip() for value in output_categories if str(value).strip()
+            } - set(FUNDING_OUTPUT_ORDER)
+            if unsupported:
+                raise ValueError(
+                    f"funding.output_categories contains unsupported values: {sorted(unsupported)}"
+                )
+
+
+def load_protocol(path: str | Path) -> dict[str, Any]:
+    protocol_path = Path(path)
+    if not protocol_path.exists():
+        raise FileNotFoundError(f"Protocol file not found: {protocol_path}")
+
+    with protocol_path.open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle)
+
+    validate_protocol_dict(data)
 
     return data
 

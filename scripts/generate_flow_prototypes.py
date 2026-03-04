@@ -26,6 +26,13 @@ from ai_dentistry.network_metrics import annotate_node_types, build_collaboratio
 
 
 ROLE_ORDER = ["Core", "Semi-Peripheral", "Peripheral", "Isolate", "Absent"]
+ROLE_DISPLAY = {
+    "Core": "High-centrality institutions",
+    "Semi-Peripheral": "Mid-centrality institutions",
+    "Peripheral": "Low-centrality institutions",
+    "Isolate": "Zero-centrality institutions",
+    "Absent": "Absent",
+}
 ROLE_COLORS = {
     "Core": "#1f77b4",
     "Semi-Peripheral": "#17becf",
@@ -40,6 +47,10 @@ FIELD_COLORS = {
     "Technical": "#33a02c",
     "Other": "#6b7280",
 }
+
+
+def display_role(role: str) -> str:
+    return ROLE_DISPLAY.get(str(role), str(role))
 
 
 @dataclass
@@ -387,7 +398,15 @@ def draw_alluvial(
         Rectangle((0, 0), 1, 1, facecolor=state_colors[s], edgecolor="none", alpha=0.9)
         for s in legend_items
     ]
-    ax.legend(handles, legend_items, loc="lower center", bbox_to_anchor=(0.5, -0.08), ncol=4, frameon=False)
+    ax.legend(
+        handles,
+        [display_role(s) for s in legend_items],
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.10),
+        ncol=2,
+        frameon=False,
+        fontsize=9,
+    )
 
 
 def plot_top_institution_trajectories(
@@ -441,7 +460,14 @@ def plot_top_institution_trajectories(
     ax.set_xticks(range(len(period_order)))
     ax.set_xticklabels(period_order, rotation=25, ha="right")
     ax.set_yticks([0, 1, 2, 3])
-    ax.set_yticklabels(["Isolate", "Peripheral", "Semi-Peripheral", "Core"])
+    ax.set_yticklabels(
+        [
+            display_role("Isolate"),
+            display_role("Peripheral"),
+            display_role("Semi-Peripheral"),
+            display_role("Core"),
+        ]
+    )
     ax.set_ylabel("Role Tier")
     ax.set_title("Option 3: Role Trajectories for Institutions with Role Changes")
     ax.grid(axis="y", linestyle="--", alpha=0.25)
@@ -527,7 +553,10 @@ def run(
     )
 
     transitions_csv = output_dir / "flow_transition_counts.csv"
-    option1_transitions.to_csv(transitions_csv, index=False)
+    transitions_export = option1_transitions.copy()
+    transitions_export["state_from_label"] = transitions_export["state_from"].astype(str).map(display_role)
+    transitions_export["state_to_label"] = transitions_export["state_to"].astype(str).map(display_role)
+    transitions_export.to_csv(transitions_csv, index=False)
 
     return {
         "option1": str(option1_path),

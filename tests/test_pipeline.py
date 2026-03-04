@@ -40,6 +40,7 @@ def test_run_pipeline_enforces_study_year_ceiling(tmp_path: Path) -> None:
             "TI": "In range",
             "DP": "2025",
             "AD": ["School of Dentistry, University A, United States."],
+            "GR": ["R01 DE000001/DE/NIDCR NIH HHS/United States"],
         },
         {
             "PMID": "200",
@@ -102,3 +103,12 @@ def test_run_pipeline_enforces_study_year_ceiling(tmp_path: Path) -> None:
     assert len(publications_df) == 1
     institutions_cell = str(publications_df.iloc[0]["institutions"])
     assert "School of Dentistry, University A, United States." in institutions_cell
+    assert publications_df.iloc[0]["funding_category"] == "US_FEDERAL_FUNDED"
+    assert bool(publications_df.iloc[0]["has_grant_support"])
+
+    funding_global = tmp_path / "outputs" / "tables" / "funding_global_network_metrics.csv"
+    funding_core = tmp_path / "outputs" / "tables" / "funding_core_newcomer_metrics.csv"
+    funding_transition = tmp_path / "outputs" / "tables" / "funding_role_transition_counts.csv"
+    assert funding_global.exists()
+    assert funding_core.exists()
+    assert funding_transition.exists()

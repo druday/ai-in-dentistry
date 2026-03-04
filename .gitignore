@@ -18,6 +18,12 @@ venv/
 build/
 dist/
 *.egg-info/
+node_modules/
+apps/web/dist/
+apps/web/node_modules/
+*.tsbuildinfo
+apps/web/vite.config.js
+apps/web/vite.config.d.ts
 
 # OS/editor files
 .DS_Store

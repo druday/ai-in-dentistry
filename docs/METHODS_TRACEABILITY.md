@@ -8,6 +8,7 @@ This document maps the manuscript Methods section to implementation files in thi
 - `src/ai_dentistry/pubmed.py`
 - `config/protocol.yaml` (`queries`, `entrez`, `study.retrieval_date`)
 - Hard publication-date ceiling (`2025-12-31`): `config/protocol.yaml::study.hard_publication_end_date`
+- Grant metadata extraction (`GR`): `src/ai_dentistry/funding.py::extract_grant_entries`
 
 ## Unit of Analysis and Network Scope
 
@@ -44,6 +45,21 @@ This document maps the manuscript Methods section to implementation files in thi
 - Core/newcomer metrics: `core_newcomer_metrics`
 - Centrality metrics: `top_centrality_table` (path-sensitive metrics on largest connected component)
 - Cluster interdisciplinarity: `cluster_interdisciplinarity_metrics`
+- Role transitions + Sankey outputs: `src/ai_dentistry/role_flow.py`
+
+## Funding-Stratified Analysis
+
+- Funding category assignment: `src/ai_dentistry/funding.py::classify_funding`
+- Pipeline stratified output generation: `src/ai_dentistry/pipeline.py::run_pipeline`
+- Funding stratified tables:
+  - `outputs/tables/funding_publication_counts_by_period.csv`
+  - `outputs/tables/funding_global_network_metrics.csv`
+  - `outputs/tables/funding_core_newcomer_metrics.csv`
+  - `outputs/tables/funding_cluster_interdisciplinarity_metrics.csv`
+  - `outputs/tables/funding_who_region_summary.csv`
+  - `outputs/tables/funding_role_transition_counts.csv`
+  - `outputs/tables/funding_structural_comparison_summary.csv`
+- Funding Sankey HTML outputs: `outputs/figures/flow_options/funding/*_role_flow_sankey.html`
 
 ## Geographic Distribution
 
@@ -56,3 +72,4 @@ This document maps the manuscript Methods section to implementation files in thi
 - Environment pinning: `requirements.txt`, `pyproject.toml`
 - CI checks: `.github/workflows/ci.yml`
 - Protocol-controlled reproducibility: `config/protocol.yaml`
+- Local full-stack reproducibility UI/API: `src/ai_dentistry/api/app.py`, `apps/web/`
